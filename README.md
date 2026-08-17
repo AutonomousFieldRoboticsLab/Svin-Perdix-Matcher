@@ -15,6 +15,10 @@ writes the corrected SVIn data and diagnostic plots to an output directory.
 - Matplotlib
 - SciPy
 - scikit-learn
+## Installation
+```
+git clone https://github.com/AutonomousFieldRoboticsLab/Svin-Perdix-Matcher
+```
 
 Install the Python dependencies with:
 
