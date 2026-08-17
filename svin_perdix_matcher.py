@@ -13,6 +13,11 @@ import pandas as pd
 from scipy.interpolate import interp1d
 from sklearn.linear_model import LinearRegression
 
+try:
+    import open3d as o3d
+except ImportError:  # pragma: no cover - optional dependency
+    o3d = None
+
 SAMPLE_STEP_SECONDS = 0.1
 FEET_TO_METERS = 0.3048
 
@@ -37,6 +42,12 @@ def parse_args() -> argparse.Namespace:
         "perdix_unit",
         choices=("m", "ft"),
         help="Depth unit used by the Perdix export",
+    )
+    parser.add_argument(
+        "--pointcloud",
+        type=Path,
+        default=None,
+        help="Optional point cloud file (.ply) to align using the saved depth offset",
     )
     return parser.parse_args()
 
@@ -200,9 +211,11 @@ def save_final_plot(perdix: DepthSeries, svin: DepthSeries, path: Path) -> None:
     plt.close(fig)
 
 
-def run(perdix_path: Path, svin_path: Path, output_path: Path, unit: str) -> None:
+def run(perdix_path: Path, svin_path: Path, output_path: Path, unit: str, pointcloud_path: Path | None = None) -> None:
     require_file(perdix_path, "Perdix CSV")
     require_file(svin_path, "SVIn file")
+    if pointcloud_path is not None:
+        require_file(pointcloud_path, "Point cloud")
     output_path.mkdir(parents=True, exist_ok=True)
 
     perdix = load_perdix(perdix_path, unit)
@@ -225,22 +238,50 @@ def run(perdix_path: Path, svin_path: Path, output_path: Path, unit: str) -> Non
     save_regression_plot(matched_svin, matched_perdix, prediction, model, output_path / "regression.png")
 
     calibrated_depth = model.predict(svin.depth.reshape(-1, 1))
+    depth_offset = float(model.intercept_)
+    save_depth_offset(output_path / "depth_offset.txt", depth_offset)
+
     calibrated_svin = DepthSeries(shifted_svin.time, calibrated_depth, svin.initial_timestamp)
     save_final_plot(perdix, calibrated_svin, output_path / "final.png")
 
-    result = pd.DataFrame(
-        {
-            "time_stamp": shifted_svin.time + perdix.initial_timestamp,
-            "depth [m]": calibrated_depth,
-        }
-    )
-    result.to_csv(output_path / "matched_svin.csv", index=False, float_format="%.5f")
+    try:
+        original_df = pd.read_csv(svin_path, sep=r"\s+")
+        if "tz" not in original_df.columns:
+            raise KeyError("SVIn file does not contain a 'tz' column")
+        if original_df.shape[0] != calibrated_depth.shape[0]:
+            raise ValueError("SVIn file row count does not match calibrated values")
+        original_df["tz"] = calibrated_depth
+        matched_txt_path = output_path / f"{svin_path.stem}_matched.txt"
+        original_df.to_csv(matched_txt_path, sep=" ", index=False, float_format="%.5f")
+
+        if pointcloud_path is not None:
+            align_point_cloud_with_offset(pointcloud_path, output_path, depth_offset)
+    except Exception as exc:  # keep failure non-fatal but informative
+        raise RuntimeError(f"Failed to write matched TXT file: {exc}") from exc
+
+
+def save_depth_offset(path: Path, offset: float) -> None:
+    path.write_text(f"{offset:.12f}\n", encoding="utf-8")
+
+
+def align_point_cloud_with_offset(pointcloud_path: Path, output_dir: Path, depth_offset: float) -> Path:
+    if o3d is None:
+        raise ImportError("open3d is required to align the point cloud")
+
+    pcd = o3d.io.read_point_cloud(str(pointcloud_path))
+    # The saved offset is already signed to match the depth correction. Use the same
+    # signed delta when translating the point cloud so it aligns with the calibrated
+    # SVIn depth values.
+    pcd.translate((0.0, 0.0, float(depth_offset)), relative=True)
+    out_path = output_dir / f"{pointcloud_path.stem}_matched.ply"
+    o3d.io.write_point_cloud(str(out_path), pcd)
+    return out_path
 
 
 def main() -> None:
     args = parse_args()
     try:
-        run(args.perdix_csv, args.svin_txt, args.output_path, args.perdix_unit)
+        run(args.perdix_csv, args.svin_txt, args.output_path, args.perdix_unit, args.pointcloud)
     except (FileNotFoundError, KeyError, ValueError) as error:
         raise SystemExit(f"Error: {error}") from error
 

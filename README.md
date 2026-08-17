@@ -15,6 +15,7 @@ writes the corrected SVIn data and diagnostic plots to an output directory.
 - Matplotlib
 - SciPy
 - scikit-learn
+- Open3D
 ## Installation
 ```
 git clone https://github.com/AutonomousFieldRoboticsLab/Svin-Perdix-Matcher
@@ -23,7 +24,7 @@ git clone https://github.com/AutonomousFieldRoboticsLab/Svin-Perdix-Matcher
 Install the Python dependencies with:
 
 ```bash
-sudo apt install python3.*-venv
+sudo apt install python3-venv
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install -r requirements.txt
@@ -49,60 +50,62 @@ The SVIn file must be whitespace-delimited and contain:
 - `#timestamp` with Unix timestamps in seconds
 - `tz` with depth measurements
 
+### Optional point cloud
+
+If you have a `.ply` point cloud that should be shifted by the same calibrated depth offset, pass it with `--pointcloud`.
+
 ## Usage
 
-```text
-python3 svin_perdix_matcher.py PERDIX_CSV SVIN_TXT OUTPUT_DIRECTORY {m,ft}
+```bash
+python svin_perdix_matcher.py PERDIX_CSV SVIN_TXT OUTPUT_DIRECTORY {m,ft} [--pointcloud POINT_CLOUD.ply]
 ```
 
-For example, using the included sample data:
+Example using the bundled data:
 
 ```bash
-python3 svin_perdix_matcher.py \
+python svin_perdix_matcher.py \
   data/CatacombsPerdix.csv \
-  data/svin_CenterSynced.txt \
+  data/svin_example.txt \
   output \
-  ft
+  ft \
+  --pointcloud data/pointcloud_example.ply
 ```
 
-The output directory is created automatically, including missing parent
-directories.
+This creates:
 
-## Example result
+- `output/svin_example_matched.txt`
+- `output/depth_offset.txt`
+- `output/pointcloud_example_matched.ply` (only when `--pointcloud` is used)
+- several diagnostic PNG files in `output/`
 
-Running the command above against `svin_CenterSynced.txt` produced a
-581.8-second time shift. Over the matching portion of the recordings, the
-linear calibration had an RMSE of 0.119 m and an R² of 0.988.
+## Example outputs
 
-| Original recordings | Time-aligned and depth-calibrated result |
+| Original recordings | Time-aligned and calibrated result |
 | --- | --- |
-| ![Original Perdix and SVIn depths](examples/original_data.png) | ![Example time-aligned and depth-calibrated Perdix and SVIn depths](examples/example_result.png) |
+| ![Original recordings](examples/original_data.png) | ![Time-aligned and calibrated result](examples/example_result.png) |
 
-Generated run artifacts belong in `output/`, which is intentionally ignored by
-Git. The representative before-and-after figures above are retained in
-`examples/`.
+## Output details
 
-## Outputs
+The main output is the matched SVIn TXT file:
 
-The script creates:
+- `*_matched.txt`
+- same original whitespace-delimited SVIn layout
+- `tz` values are replaced with the calibrated depth values
 
-| File | Description |
-| --- | --- |
-| `matched_svin.csv` | Corrected SVIn timestamps and depths in meters |
-| `original_data.png` | Original Perdix and SVIn recordings |
-| `shifted.png` | Recordings after applying the calculated time offset |
-| `interpolate.png` | Overlapping data after SVIn interpolation |
-| `regression.png` | Linear depth-calibration fit |
-| `final.png` | Perdix data and the synchronized, calibrated SVIn result |
+Additional diagram outputs in `output/` include:
 
-The CSV contains two columns:
-
-- `time_stamp`: Unix timestamp in seconds
-- `depth [m]`: calibrated depth in meters
+- `original_data.png`
+- `shifted.png`
+- `interpolate.png`
+- `regression.png`
+- `final.png`
+- `depth_offset.txt` (saved calibration offset)
+- `*_matched.ply` when a point cloud is passed
 
 ## Notes
 
 - Perdix timestamps are interpreted as UTC.
 - The Perdix recording must be at least as long as the SVIn recording.
 - The time offset is searched at 0.1-second resolution.
-- Existing files with the output names above are overwritten.
+- Existing output files are overwritten.
+- The depth offset is stored in `depth_offset.txt` and can be reused for aligned point-cloud processing.
