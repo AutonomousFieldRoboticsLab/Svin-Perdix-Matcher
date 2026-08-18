@@ -21,9 +21,12 @@ writes the corrected SVIn data and diagnostic plots to an output directory.
 git clone https://github.com/AutonomousFieldRoboticsLab/Svin-Perdix-Matcher
 ```
 
-Install the Python dependencies with:
+To install Python dependencies and set up the workspace, run:
 
 ```bash
+mkdir ~/depth_matcher_ws
+cd ~/depth_matcher_ws
+git clone https://github.com/AutonomousFieldRoboticsLab/Svin-Perdix-Matcher .
 sudo apt install python3-venv
 python3 -m venv .venv
 source .venv/bin/activate
