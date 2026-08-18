@@ -17,9 +17,6 @@ writes the corrected SVIn data and diagnostic plots to an output directory.
 - scikit-learn
 - Open3D
 ## Installation
-```
-git clone https://github.com/AutonomousFieldRoboticsLab/Svin-Perdix-Matcher
-```
 
 To install Python dependencies and set up the workspace, run:
 
